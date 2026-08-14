@@ -26,3 +26,26 @@ def create_product(product: ProductCreate):
     db.refresh(new_product)
     db.close()
     return new_product
+from schemas import StockUpdate
+from models import Stock
+
+@app.get("/stock")
+def get_stock():
+    db = SessionLocal()
+    stock = db.query(Stock).all()
+    db.close()
+    return stock
+
+@app.post("/stock")
+def add_stock(stock_data: StockUpdate):
+    db = SessionLocal()
+    existing = db.query(Stock).filter(Stock.product_id == stock_data.product_id).first()
+    if existing:
+        existing.quantity += stock_data.quantity
+    else:
+        existing = Stock(product_id=stock_data.product_id, quantity=stock_data.quantity)
+        db.add(existing)
+    db.commit()
+    db.refresh(existing)
+    db.close()
+    return existing
