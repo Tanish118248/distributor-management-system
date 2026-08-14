@@ -45,3 +45,4 @@ class LedgerEntry(Base):
     balance_after = Column(Integer, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)
     product = relationship("Product")
+    
