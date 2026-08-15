@@ -8,4 +8,13 @@ class ProductCreate(BaseModel):
 class StockUpdate(BaseModel):
     product_id: int
     quantity: int
-    
+
+from typing import List
+
+class OrderItemCreate(BaseModel):
+    product_id: int
+    quantity: int
+
+class OrderCreate(BaseModel):
+    customer_name: str
+    items: List[OrderItemCreate]
