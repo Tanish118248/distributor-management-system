@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/stock", label: "Stock", roles: ["owner", "salesperson", "accountant"] },
   { href: "/dashboard/orders", label: "Orders", roles: ["owner", "salesperson", "accountant"] },
   { href: "/dashboard/ledger", label: "Ledger", roles: ["owner", "accountant"] },
+  { href: "/dashboard/products", label: "Products", roles: ["owner", "salesperson", "accountant"] },
 ];
 
 export default function Layout({ children, user, onLogout }) {

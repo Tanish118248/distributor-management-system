@@ -32,6 +32,7 @@ class ProductCreate(BaseModel):
     category: Optional[str] = None
     unit: Optional[str] = None
     reorder_lead_time_days: int = 7
+    price: Decimal = 0
 
 
 class ProductOut(ProductCreate):

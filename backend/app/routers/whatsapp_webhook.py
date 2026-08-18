@@ -57,9 +57,10 @@ def receive_whatsapp_message(
 
     order_item = OrderItem(
         order_id=order.id, product_id=product.id, batch_id=batch.id,
-        quantity=quantity, unit_price=0,
+        quantity=quantity, unit_price=product.price,
     )
     db.add(order_item)
+    order.total_amount = quantity * product.price
     db.commit()
 
     try:

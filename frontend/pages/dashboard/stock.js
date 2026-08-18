@@ -49,6 +49,7 @@ export default function StockPage() {
     { key: "product_id", label: "Product" },
     { key: "quantity", label: "Qty" },
     { key: "expiry_date", label: "Expiry" },
+    { key: "purchase_date", label: "Received" },
     {
       key: "status",
       label: "Status",

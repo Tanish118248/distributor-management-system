@@ -34,6 +34,7 @@ class Product(Base):
     reorder_lead_time_days = Column(Integer, default=7)
 
     batches = relationship("StockBatch", back_populates="product")
+    price = Column(Numeric(12, 2), default=0)
 
 
 class Supplier(Base):

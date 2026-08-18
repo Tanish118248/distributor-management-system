@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, stock, orders, ledger, whatsapp_webhook
+from app.routers import auth, stock, orders, ledger, whatsapp_webhook, products
 from app.services.scheduler import start_scheduler
 
 app = FastAPI(title="Distributor Order, Stock & Ledger Management System")
@@ -21,6 +21,7 @@ app.include_router(stock.router)
 app.include_router(orders.router)
 app.include_router(ledger.router)
 app.include_router(whatsapp_webhook.router)
+app.include_router(products.router)
 
 
 @app.on_event("startup")
