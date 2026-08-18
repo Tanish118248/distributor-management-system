@@ -14,4 +14,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// NEW: handle expired/invalid tokens globally
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401 && typeof window !== "undefined") {
+      localStorage.removeItem("dsms_token");
+      window.location.href = "/login";
+    }
+    return Promise.reject(err);
+  }
+);
+
 export default api;

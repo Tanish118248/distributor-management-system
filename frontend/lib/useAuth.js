@@ -16,6 +16,8 @@ export function useAuth() {
     const payload = jwtDecodePayload(token);
     if (payload) {
       setUser({ email: payload.sub, role: payload.role });
+    } else {
+      localStorage.removeItem("dsms_token"); // stale/expired token
     }
     setLoading(false);
   }, []);
