@@ -14,7 +14,7 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 
 @router.post("", response_model=OrderOut, dependencies=[Depends(get_current_user)])
 def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
-    order = Order(customer_id=order_in.customer_id, status="pending", total_amount=0)
+    order = Order(customer_id=order_in.customer_id, status="pending", total_amount=0, source="manual")
     db.add(order)
     db.flush()  # get order.id before committing
 

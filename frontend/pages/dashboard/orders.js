@@ -57,6 +57,21 @@ export default function OrdersPage() {
   const columns = [
     { key: "id", label: "Order" },
     { key: "customer_id", label: "Customer" },
+    {
+      key: "source",
+      label: "Source",
+      render: (r) => (
+        <span
+          className={`text-xs px-2 py-1 rounded-full ${
+            r.source === "whatsapp"
+              ? "bg-green-100 text-green-700"
+              : "bg-gray-100 text-gray-600"
+          }`}
+        >
+          {r.source === "whatsapp" ? "WhatsApp" : "Manual"}
+        </span>
+      ),
+    },
     { key: "total_amount", label: "Total", render: (r) => `₹${r.total_amount}` },
     {
       key: "status",
@@ -131,3 +146,4 @@ export default function OrdersPage() {
     </Layout>
   );
 }
+

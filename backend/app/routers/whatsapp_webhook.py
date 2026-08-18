@@ -46,7 +46,7 @@ def receive_whatsapp_message(
         send_whatsapp_message(From, "We couldn't find your account. Please contact the distributor.")
         return {"status": "customer_not_found"}
 
-    order = Order(customer_id=customer.id, status="pending", total_amount=0)
+    order = Order(customer_id=customer.id, status="pending", total_amount=0, source="whatsapp")
     db.add(order)
     db.flush()
 

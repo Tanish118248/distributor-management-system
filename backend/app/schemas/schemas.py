@@ -103,6 +103,7 @@ class OrderOut(BaseModel):
     status: str
     total_amount: Decimal
     items: List[OrderItemOut] = []
+    source: str
 
     class Config:
         from_attributes = True
