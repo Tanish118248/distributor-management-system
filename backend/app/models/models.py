@@ -79,7 +79,7 @@ class Order(Base):
     total_amount = Column(Numeric(12, 2), default=0)
 
     items = relationship("OrderItem", back_populates="order")
-    source = Column(String, default="manual")
+    source = Column(String, default="manual", nullable=False, server_default="manual")
 
 
 class OrderItem(Base):
