@@ -11,6 +11,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const router = useRouter();
+  const timedOut = router.query.reason === "timeout";
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -42,6 +43,12 @@ export default function Login() {
           <p className="text-xs tracking-widest text-amber-500 font-semibold">DISTRIBUTOR MANAGEMENT</p>
           <h1 className="font-serif text-2xl text-white mt-2">Order, Stock & Ledger</h1>
         </div>
+
+        {timedOut && (
+          <p className="text-sm text-amber-200 bg-navy-900 border border-amber-500/40 rounded-md px-3 py-2 mb-4 text-center">
+            You were logged out due to inactivity.
+          </p>
+        )}
 
         <Card className="p-6">
           <div className="flex mb-5 rounded-md border border-gray-200 overflow-hidden text-sm">

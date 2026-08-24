@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { useIdleTimeout } from "../lib/useIdleTimeout";
+import IdleWarning from "./IdleWarning";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview", roles: ["owner", "salesperson", "accountant"] },
@@ -11,6 +13,7 @@ const NAV_ITEMS = [
 
 export default function Layout({ children, user, onLogout }) {
   const router = useRouter();
+  const { showWarning, stayLoggedIn, doLogout } = useIdleTimeout();
 
   return (
     <div className="min-h-screen flex bg-paper">
@@ -57,6 +60,8 @@ export default function Layout({ children, user, onLogout }) {
       </aside>
 
       <main className="flex-1 p-8 overflow-y-auto">{children}</main>
+
+      <IdleWarning show={showWarning} onStayLoggedIn={stayLoggedIn} onLogoutNow={doLogout} />
     </div>
   );
 }
