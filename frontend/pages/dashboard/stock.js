@@ -22,7 +22,10 @@ export default function StockPage() {
   }
 
   useEffect(() => {
-    if (user) refresh();
+    if (!user) return;
+    refresh();
+    const interval = setInterval(refresh, 15000); // refresh every 15 seconds
+    return () => clearInterval(interval);
   }, [user]);
 
   async function handleAdd(e) {

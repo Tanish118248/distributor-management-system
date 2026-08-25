@@ -18,12 +18,19 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!user) return;
-    Promise.all([api.get("/stock/batches"), api.get("/orders")])
-      .then(([batchRes, orderRes]) => {
-        setBatches(batchRes.data);
-        setOrders(orderRes.data);
-      })
-      .catch(() => setFetchError("Couldn't reach the backend. Is it running?"));
+
+    function loadDashboard() {
+      Promise.all([api.get("/stock/batches"), api.get("/orders")])
+        .then(([batchRes, orderRes]) => {
+          setBatches(batchRes.data);
+          setOrders(orderRes.data);
+        })
+        .catch(() => setFetchError("Couldn't reach the backend. Is it running?"));
+    }
+
+    loadDashboard();
+    const interval = setInterval(loadDashboard, 15000);
+    return () => clearInterval(interval);
   }, [user]);
 
   if (loading || !user) return null;
