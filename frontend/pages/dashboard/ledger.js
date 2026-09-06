@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
+import Head from "next/head";
 import Layout from "../../components/Layout";
 import { Card, Table, Button, Stat } from "../../components/ui";
 import { useAuth } from "../../lib/useAuth";
@@ -51,67 +52,126 @@ export default function LedgerPage() {
   const currentBalance = entries.length > 0 ? entries[entries.length - 1].running_balance : 0;
 
   const columns = [
-    { key: "date", label: "Date", render: (r) => new Date(r.date).toLocaleDateString() },
-    { key: "entry_type", label: "Type" },
-    { key: "amount", label: "Amount", render: (r) => `₹${r.amount}` },
-    { key: "running_balance", label: "Balance", render: (r) => `₹${r.running_balance}` },
+    {
+      key: "date",
+      label: "Date",
+      render: (r) => (
+        <span className="text-surface-300 tabular-nums">{new Date(r.date).toLocaleDateString()}</span>
+      ),
+    },
+    {
+      key: "entry_type",
+      label: "Type",
+      render: (r) => (
+        <span className={`pill ${r.entry_type === "payment" ? "pill-success" : "pill-danger"}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${r.entry_type === "payment" ? "bg-emerald-400" : "bg-red-400"}`} />
+          {r.entry_type}
+        </span>
+      ),
+    },
+    {
+      key: "amount",
+      label: "Amount",
+      render: (r) => (
+        <span className={`font-semibold tabular-nums ${r.entry_type === "payment" ? "text-emerald-400" : "text-red-400"}`}>
+          {r.entry_type === "payment" ? "+" : "-"}₹{r.amount}
+        </span>
+      ),
+    },
+    {
+      key: "running_balance",
+      label: "Balance",
+      render: (r) => <span className="font-semibold tabular-nums text-surface-200">₹{r.running_balance}</span>,
+    },
   ];
 
   return (
     <Layout user={user} onLogout={logout}>
-      <h1 className="font-serif text-2xl text-navy-950 mb-1">Ledger</h1>
-      <p className="text-sm text-gray-500 mb-6">Running credit/payment balance per customer.</p>
+      <Head>
+        <title>Ledger — Distributor Management</title>
+      </Head>
 
-      <div className="flex gap-3 items-end mb-6">
-        <div>
-          <label className="block text-xs text-gray-600 mb-1">Customer ID</label>
-          <input
-            type="number"
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm w-32"
+      <div className="animate-fade-in">
+        <h1 className="text-2xl font-bold text-surface-50 mb-1">Ledger</h1>
+        <p className="text-sm text-surface-400 mb-6">Running credit/payment balance per customer.</p>
+
+        {/* Customer Selector */}
+        <div className="flex gap-3 items-end mb-6">
+          <div>
+            <label className="block text-xs font-medium text-surface-400 mb-1.5 uppercase tracking-wider">
+              Customer ID
+            </label>
+            <input
+              type="number"
+              value={customerId}
+              onChange={(e) => setCustomerId(e.target.value)}
+              className="glass-input w-36"
+            />
+          </div>
+          <Button variant="ghost" onClick={refresh}>Load statement</Button>
+        </div>
+
+        {/* Balance Stat */}
+        <div className="mb-6 w-72">
+          <Stat
+            label="Current balance"
+            value={`₹${currentBalance}`}
+            accent
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+              </svg>
+            }
           />
         </div>
-        <Button variant="ghost" onClick={refresh}>Load statement</Button>
-      </div>
 
-      <div className="mb-6 w-64">
-        <Stat label="Current balance" value={`₹${currentBalance}`} accent />
-      </div>
+        {/* Add Entry Form */}
+        {(user.role === "owner" || user.role === "accountant") && (
+          <Card className="p-5 mb-6" hover={false}>
+            <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label className="block text-xs font-medium text-surface-400 mb-1.5 uppercase tracking-wider">
+                  Type
+                </label>
+                <select
+                  value={form.entry_type}
+                  onChange={(e) => setForm({ ...form, entry_type: e.target.value })}
+                  className="glass-select"
+                >
+                  <option value="credit">Credit (owed)</option>
+                  <option value="payment">Payment (received)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-surface-400 mb-1.5 uppercase tracking-wider">
+                  Amount
+                </label>
+                <input
+                  required
+                  type="number"
+                  value={form.amount}
+                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                  className="glass-input"
+                />
+              </div>
+              <Button type="submit" variant="primary">Add entry</Button>
+            </form>
+            {error && (
+              <div className="flex items-center gap-2 text-sm text-status-danger mt-3 animate-fade-in">
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                </svg>
+                {error}
+              </div>
+            )}
+          </Card>
+        )}
 
-      {(user.role === "owner" || user.role === "accountant") && (
-        <Card className="p-5 mb-6">
-          <form onSubmit={handleAdd} className="grid grid-cols-3 gap-3 items-end">
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Type</label>
-              <select
-                value={form.entry_type}
-                onChange={(e) => setForm({ ...form, entry_type: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              >
-                <option value="credit">Credit (owed)</option>
-                <option value="payment">Payment (received)</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">Amount</label>
-              <input
-                required
-                type="number"
-                value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-              />
-            </div>
-            <Button type="submit" variant="primary">Add entry</Button>
-          </form>
-          {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+        {/* Entries Table */}
+        <Card className="p-5">
+          <Table columns={columns} rows={entries} emptyLabel="No ledger entries for this customer yet." />
         </Card>
-      )}
-
-      <Card className="p-5">
-        <Table columns={columns} rows={entries} emptyLabel="No ledger entries for this customer yet." />
-      </Card>
+      </div>
     </Layout>
   );
 }
