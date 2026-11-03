@@ -37,8 +37,10 @@ def get_fefo_batch(db: Session, product_id: int, needed_qty) -> StockBatch:
             StockBatch.product_id == product_id,
             StockBatch.status.in_(["active", "expiring_soon"]),
             StockBatch.quantity >= needed_qty,
+            StockBatch.expiry_date >= date.today(),   # never sell expired stock
         )
         .order_by(StockBatch.expiry_date.asc())
+        .with_for_update()   # lock the row so two orders can't take the same stock (Postgres)
         .first()
     )
     if not batch:

@@ -67,6 +67,9 @@ class Customer(Base):
     name = Column(String, nullable=False)
     phone = Column(String, nullable=False)  # used for WhatsApp alerts, e.g. "+9198xxxxxxx"
     address = Column(String)
+    # --- credit control (0 = no limit set, not enforced) ---
+    credit_limit = Column(Numeric(12, 2), nullable=False, default=0, server_default="0")
+    credit_days = Column(Integer, nullable=False, default=15, server_default="15")
 
 
 class Order(Base):
@@ -75,8 +78,14 @@ class Order(Base):
     id = Column(Integer, primary_key=True, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     order_date = Column(DateTime, default=datetime.utcnow)
-    status = Column(String, default="pending")  # pending/dispatched/delivered
+    status = Column(String, default="pending")  # pending/on_hold/dispatched/delivered/rejected
     total_amount = Column(Numeric(12, 2), default=0)
+    # --- credit control ---
+    due_date = Column(Date, nullable=True)
+    paid_amount = Column(Numeric(12, 2), nullable=False, default=0, server_default="0")
+    paid_at = Column(DateTime, nullable=True)  # set when fully paid
+    hold_reason = Column(String, nullable=True)
+    delivery_confirmed_at = Column(DateTime, nullable=True)  # customer replied CONFIRM <id>
 
     items = relationship("OrderItem", back_populates="order")
     source = Column(String, default="manual", nullable=False, server_default="manual")
@@ -100,6 +109,7 @@ class LedgerEntry(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=True)
     entry_type = Column(String, nullable=False)  # credit / payment
     amount = Column(Numeric(12, 2), nullable=False)
     date = Column(DateTime, default=datetime.utcnow)
