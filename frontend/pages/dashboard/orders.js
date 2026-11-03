@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import Layout from "../../components/Layout";
-import { Card, Table, Button } from "../../components/ui";
+import { Card, Table, Button, Banner } from "../../components/ui";
 import { useAuth } from "../../lib/useAuth";
 import api from "../../lib/api";
 
@@ -11,8 +11,27 @@ export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ customer_id: "", product_id: "", quantity: "", unit_price: "" });
+  const [form, setForm] = useState({ customer_id: "", product_id: "", quantity: "" });
   const [error, setError] = useState("");
+  const [customers, setCustomers] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [credit, setCredit] = useState(null); // balance info for the selected customer
+
+  useEffect(() => {
+    if (!user) return;
+    api.get("/customers").then((r) => setCustomers(r.data)).catch(() => {});
+    api.get("/products").then((r) => setProducts(r.data)).catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    setCredit(null);
+    if (!form.customer_id) return;
+    api.get(`/credit/customer/${form.customer_id}`).then((r) => setCredit(r.data)).catch(() => {});
+  }, [form.customer_id]);
+
+  const customerName = (id) => customers.find((c) => c.id === id)?.name || `#${id}`;
+  const selectedProduct = products.find((p) => String(p.id) === String(form.product_id));
+  const estimate = selectedProduct && form.quantity ? Number(selectedProduct.price) * Number(form.quantity) : 0;
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -39,11 +58,10 @@ export default function OrdersPage() {
           {
             product_id: Number(form.product_id),
             quantity: Number(form.quantity),
-            unit_price: Number(form.unit_price || 0),
           },
         ],
       });
-      setForm({ customer_id: "", product_id: "", quantity: "", unit_price: "" });
+      setForm({ customer_id: "", product_id: "", quantity: "" });
       setShowForm(false);
       refresh();
     } catch (err) {
@@ -52,7 +70,20 @@ export default function OrdersPage() {
   }
 
   async function updateStatus(orderId, status) {
-    await api.patch(`/orders/${orderId}/status?status=${status}`);
+    try {
+      await api.patch(`/orders/${orderId}/status?status=${status}`);
+    } catch (err) {
+      alert(err?.response?.data?.detail || "Couldn't change status.");
+    }
+    refresh();
+  }
+
+  async function decide(orderId, action) {
+    try {
+      await api.post(`/orders/${orderId}/${action}`);
+    } catch (err) {
+      alert(err?.response?.data?.detail || "Couldn't update the order.");
+    }
     refresh();
   }
 
@@ -60,7 +91,7 @@ export default function OrdersPage() {
 
   const columns = [
     { key: "id", label: "Order" },
-    { key: "customer_id", label: "Customer" },
+    { key: "customer_id", label: "Customer", render: (r) => customerName(r.customer_id) },
     {
       key: "source",
       label: "Source",
@@ -84,7 +115,20 @@ export default function OrdersPage() {
       key: "status",
       label: "Status",
       render: (row) =>
-        user.role !== "accountant" ? (
+        row.status === "on_hold" ? (
+          <div>
+            <span className="pill pill-warning">on hold</span>
+            {user.role === "owner" && (
+              <div className="flex gap-2 mt-2">
+                <Button variant="primary" onClick={() => decide(row.id, "approve")}>Approve</Button>
+                <Button variant="ghost" onClick={() => decide(row.id, "reject")}>Reject</Button>
+              </div>
+            )}
+            <p className="text-xs text-surface-500 mt-1 max-w-xs">{row.hold_reason}</p>
+          </div>
+        ) : row.status === "rejected" ? (
+          <span className="pill pill-danger">rejected</span>
+        ) : user.role !== "accountant" ? (
           <select
             value={row.status}
             onChange={(e) => updateStatus(row.id, e.target.value)}
@@ -121,61 +165,43 @@ export default function OrdersPage() {
           )}
         </div>
         <p className="text-sm text-surface-400 mb-6">
-          Stock is deducted automatically from the nearest-expiry batch on creation.
+          Prices come from the product list. Stock is taken from the nearest-expiry batch, and the sale is added to the customer's ledger automatically.
         </p>
 
         {showForm && (
           <Card className="p-5 mb-6 animate-slide-down" hover={false}>
-            <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+            <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
               <div>
-                <label className="block text-xs font-medium text-surface-400 mb-1.5 uppercase tracking-wider">
-                  Customer ID
-                </label>
-                <input
-                  required
-                  type="number"
-                  value={form.customer_id}
-                  onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
-                  className="glass-input"
-                />
+                <label className="block text-xs font-medium text-surface-400 mb-1.5 uppercase tracking-wider">Customer</label>
+                <select required value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })} className="glass-select">
+                  <option value="">Select customer…</option>
+                  {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-surface-400 mb-1.5 uppercase tracking-wider">
-                  Product ID
-                </label>
-                <input
-                  required
-                  type="number"
-                  value={form.product_id}
-                  onChange={(e) => setForm({ ...form, product_id: e.target.value })}
-                  className="glass-input"
-                />
+                <label className="block text-xs font-medium text-surface-400 mb-1.5 uppercase tracking-wider">Product</label>
+                <select required value={form.product_id} onChange={(e) => setForm({ ...form, product_id: e.target.value })} className="glass-select">
+                  <option value="">Select product…</option>
+                  {products.map((p) => <option key={p.id} value={p.id}>{p.name} — ₹{p.price}/{p.unit || "unit"}</option>)}
+                </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-surface-400 mb-1.5 uppercase tracking-wider">
-                  Quantity
-                </label>
-                <input
-                  required
-                  type="number"
-                  value={form.quantity}
-                  onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-                  className="glass-input"
-                />
+                <label className="block text-xs font-medium text-surface-400 mb-1.5 uppercase tracking-wider">Quantity</label>
+                <input required type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className="glass-input" />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-surface-400 mb-1.5 uppercase tracking-wider">
-                  Unit price
-                </label>
-                <input
-                  type="number"
-                  value={form.unit_price}
-                  onChange={(e) => setForm({ ...form, unit_price: e.target.value })}
-                  className="glass-input"
-                />
-              </div>
-              <Button type="submit" variant="primary">Create order</Button>
+              <Button type="submit" variant="primary">Create order{estimate ? ` (₹${estimate})` : ""}</Button>
             </form>
+            {credit && (credit.risk !== "low" || Number(credit.outstanding) > 0) && (
+              <div className="mt-4">
+                <Banner tone={credit.risk === "high" ? "danger" : "warning"}>
+                  {credit.name} currently owes ₹{credit.outstanding}
+                  {Number(credit.credit_limit) > 0 ? ` (limit ₹${credit.credit_limit})` : ""}
+                  {Number(credit.overdue) > 0 ? `, of which ₹${credit.overdue} is overdue` : ""}.
+                  {credit.risk_reasons.length > 0 ? ` ${credit.risk_reasons.join("; ")}.` : ""}
+                  {" "}Orders beyond the limit are held for the owner&apos;s approval.
+                </Banner>
+              </div>
+            )}
             {error && (
               <div className="flex items-center gap-2 text-sm text-status-danger mt-3 animate-fade-in">
                 <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
