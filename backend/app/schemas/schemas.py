@@ -64,6 +64,16 @@ class CustomerCreate(BaseModel):
     name: str
     phone: str
     address: Optional[str] = None
+    credit_limit: Decimal = 0   # 0 = no limit enforced
+    credit_days: int = 15
+
+
+class CustomerUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    credit_limit: Optional[Decimal] = None
+    credit_days: Optional[int] = None
 
 
 class CustomerOut(CustomerCreate):
@@ -77,7 +87,7 @@ class CustomerOut(CustomerCreate):
 class OrderItemCreate(BaseModel):
     product_id: int
     quantity: Decimal
-    unit_price: Decimal = 0
+    unit_price: Decimal = 0   # ignored: price always comes from the product
 
 
 class OrderCreate(BaseModel):
@@ -104,6 +114,10 @@ class OrderOut(BaseModel):
     total_amount: Decimal
     items: List[OrderItemOut] = []
     source: Optional[str] = None
+    due_date: Optional[date] = None
+    paid_amount: Decimal = 0
+    hold_reason: Optional[str] = None
+    delivery_confirmed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -118,6 +132,7 @@ class LedgerEntryCreate(BaseModel):
 
 class LedgerEntryOut(LedgerEntryCreate):
     id: int
+    order_id: Optional[int] = None
     date: datetime
     running_balance: Decimal
 

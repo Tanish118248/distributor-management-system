@@ -2,33 +2,52 @@ from datetime import date, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from app.core.config import settings
 from app.core.database import SessionLocal
-from app.models.models import StockBatch, AlertLog
+from app.models.models import AlertLog, StockBatch
 from app.services.whatsapp import send_whatsapp_message
-from app.models.models import Customer  # only needed if you alert a specific customer/owner
 
 
 def check_expiring_batches():
-    """Runs daily. Flags batches within 10 days of expiry and logs/sends an alert."""
+    """Runs daily. Marks expired batches, flags batches expiring within 10 days, alerts the owner."""
     db = SessionLocal()
     try:
-        threshold_date = date.today() + timedelta(days=10)
-        batches = (
+        today = date.today()
+
+        # 1) anything past its expiry date is no longer sellable
+        expired = (
             db.query(StockBatch)
-            .filter(StockBatch.expiry_date <= threshold_date, StockBatch.status == "active")
+            .filter(StockBatch.expiry_date < today, StockBatch.status.in_(["active", "expiring_soon"]))
             .all()
         )
-        for batch in batches:
-            batch.status = "expiring_soon"
+        for batch in expired:
+            batch.status = "expired"
 
-            # Send an alert (to the distributor's own configured number)
+        # 2) anything expiring within 10 days gets flagged + owner is told
+        soon = (
+            db.query(StockBatch)
+            .filter(
+                StockBatch.expiry_date >= today,
+                StockBatch.expiry_date <= today + timedelta(days=10),
+                StockBatch.status == "active",
+            )
+            .all()
+        )
+        for batch in soon:
+            batch.status = "expiring_soon"
             message = (
                 f"Alert: Batch #{batch.id} (Product {batch.product_id}) "
                 f"expires on {batch.expiry_date}. Use it first (FEFO)."
             )
-            send_whatsapp_message(to_number="whatsapp:+91XXXXXXXXXX", body=message)
-
-            db.add(AlertLog(alert_type="expiry", related_id=batch.id, channel="whatsapp", status="sent"))
+            sent = "skipped"
+            if settings.OWNER_PHONE:
+                try:
+                    send_whatsapp_message(to_number=settings.OWNER_PHONE, body=message)
+                    sent = "sent"
+                except Exception as e:
+                    print(f"Expiry alert failed: {e}")
+                    sent = "failed"
+            db.add(AlertLog(alert_type="expiry", related_id=batch.id, channel="whatsapp", status=sent))
 
         db.commit()
     finally:

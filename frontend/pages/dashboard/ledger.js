@@ -9,7 +9,8 @@ import api from "../../lib/api";
 export default function LedgerPage() {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
-  const [customerId, setCustomerId] = useState("1");
+  const [customerId, setCustomerId] = useState("");
+  const [customers, setCustomers] = useState([]);
   const [entries, setEntries] = useState([]);
   const [form, setForm] = useState({ entry_type: "credit", amount: "" });
   const [error, setError] = useState("");
@@ -20,6 +21,14 @@ export default function LedgerPage() {
 
   useEffect(() => {
     if (user && (user.role === "owner" || user.role === "accountant")) router.replace(router.pathname);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    api.get("/customers").then((res) => {
+      setCustomers(res.data);
+      if (res.data.length > 0) setCustomerId((cur) => cur || String(res.data[0].id));
+    }).catch(() => {});
   }, [user]);
 
   function refresh() {
@@ -99,16 +108,19 @@ export default function LedgerPage() {
         <div className="flex gap-3 items-end mb-6">
           <div>
             <label className="block text-xs font-medium text-surface-400 mb-1.5 uppercase tracking-wider">
-              Customer ID
+              Customer
             </label>
-            <input
-              type="number"
+            <select
               value={customerId}
               onChange={(e) => setCustomerId(e.target.value)}
-              className="glass-input w-36"
-            />
+              className="glass-select w-64"
+            >
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
           </div>
-          <Button variant="ghost" onClick={refresh}>Load statement</Button>
+          <Button variant="ghost" onClick={refresh}>Refresh</Button>
         </div>
 
         {/* Balance Stat */}
@@ -156,6 +168,10 @@ export default function LedgerPage() {
               </div>
               <Button type="submit" variant="primary">Add entry</Button>
             </form>
+            <p className="text-xs text-surface-500 mt-3">
+              Sales are added here automatically when an order is created. A payment is applied to the
+              customer&apos;s oldest unpaid orders first.
+            </p>
             {error && (
               <div className="flex items-center gap-2 text-sm text-status-danger mt-3 animate-fade-in">
                 <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
