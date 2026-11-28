@@ -7,11 +7,23 @@ wholesale/retail goods supplier) manage three things in one place:
   (First-Expiry-First-Out) issuing logic
 - **Orders** — placed either manually via the dashboard or automatically via
   a customer's WhatsApp message
-- **Ledger** — a running credit/payment balance per customer
+- **Ledger and credit** — a running balance per customer, with credit limits,
+  payment terms and overdue tracking
 
-The system also proactively sends WhatsApp alerts (via Twilio) when stock is
-close to expiry, and lets customers place orders directly by texting a
-structured message like `ORDER RICE5KG 10`.
+The system also sends WhatsApp alerts (via Twilio) when stock is close to
+expiry, lets customers place orders by texting a structured message like
+`ORDER RICE5KG 10`, and holds orders from customers who exceed their credit
+limit until the owner approves them.
+
+**Live demo:** <https://main.d17amka6l3abs0.amplifyapp.com/login>
+
+## Team
+
+| Name | Contribution |
+|---|---|
+| Divya Sharma | Built credit control, tested the app and prepared demo data |
+| Gautam Jindal | Contributed to the project build, testing and documentation |
+| Tanish Garg | Set up the backend, database and hosting for the project |
 
 ## Tech Stack
 
@@ -21,12 +33,12 @@ structured message like `ORDER RICE5KG 10`.
 | Styling | Tailwind CSS | |
 | HTTP client | Axios | |
 | Backend | FastAPI (Python) | Layered structure: `routers/`, `models/`, `schemas/`, `services/`, `core/` |
-| Database | PostgreSQL | via SQLAlchemy ORM |
+| Database | PostgreSQL | via SQLAlchemy ORM, hosted on Supabase |
 | Migrations | Alembic | |
 | Auth | JWT (`python-jose`) + bcrypt password hashing | Role-based: `owner`, `salesperson`, `accountant` |
-| Background jobs | APScheduler | Daily cron job checks for expiring stock |
+| Background jobs | APScheduler | Daily job checks for expiring stock |
 | Messaging | Twilio WhatsApp API | Inbound orders + outbound alerts |
-| Deployment (intended) | Frontend → Vercel, Backend → Render, DB → Supabase/Neon | Based on config/env comments in the code |
+| Deployment | Frontend on AWS Amplify, backend on AWS | Database on Supabase |
 
 ## Features
 
@@ -34,20 +46,30 @@ structured message like `ORDER RICE5KG 10`.
 - Signup and login with email + password (`/auth/signup`, `/auth/login`)
 - Passwords are hashed with bcrypt, never stored in plain text
 - Login returns a JWT access token, which the frontend stores and attaches to every API request
+- The frontend warns before an idle session times out and signs the user out on an expired token
 - Three roles: `owner`, `salesperson`, `accountant` — each endpoint declares which roles may call it
 
 ### Product & Stock Management
-- Products have a name, category, unit, price, and a reorder lead time
+- Products have a name, category, unit, price, and a reorder lead time; they can be added from the dashboard
 - Stock is tracked as **batches** (not just a single quantity number) — each batch has its own purchase date, expiry date, and status (`active` / `expiring_soon` / `expired` / `depleted`)
-- **FEFO issuing**: when an order is placed, the system automatically picks stock from the batch that expires soonest first, so older stock is used before it goes to waste
-- A daily background job scans for batches expiring within 10 days, marks them `expiring_soon`, and sends a WhatsApp alert
+- **FEFO issuing**: when an order is placed, the system automatically picks stock from the batch that expires soonest first; expired batches are never allocated
+- A daily background job (08:00) scans for batches expiring within 10 days, marks them `expiring_soon`, and sends the owner a WhatsApp alert
 
 ### Orders
 - Orders can be created two ways:
   1. **Manually**, from the dashboard (an owner/salesperson selects a customer and products)
   2. **Automatically via WhatsApp**, when a customer texts a message like `ORDER RICE5KG 10`
 - Each order is linked to specific stock batches (via FEFO), so stock is deducted at the moment the order is placed
-- Orders have a status lifecycle: `pending` → `dispatched` → `delivered`
+- Prices come from the product catalogue, not from the request
+- Status lifecycle: `pending` → `dispatched` → `delivered`, plus `on_hold` for orders waiting for approval
+
+### Customers & Credit Control
+- Each customer (shop) has a **credit limit** and **payment days**
+- An order is **held for owner approval** if it would push the customer over their limit, or if the customer has dues more than 30 days overdue
+- The owner can approve a held order, or reject it, which restores the stock
+- A **Credit & Dues** page shows outstanding amounts, ageing buckets (0–30, 30–60, 60+ days), risk levels and held orders
+- Payments are applied to the oldest unpaid order first
+- One-tap WhatsApp payment reminders can be sent to customers with dues
 
 ### Ledger (Customer Accounts)
 - Every customer has a running balance, updated with each ledger entry
@@ -57,6 +79,14 @@ structured message like `ORDER RICE5KG 10`.
 ### WhatsApp Integration
 - **Inbound**: Twilio forwards incoming WhatsApp messages to `/webhook/whatsapp`; the system parses a fixed format (`ORDER <product> <qty>`), validates the product and customer, and creates the order automatically
 - **Outbound**: the system sends WhatsApp messages for order confirmations (via a pre-approved Twilio template) and expiry alerts (plain text)
+
+### Roles at a glance
+
+| Role | Intended use |
+|---|---|
+| Owner | Full access, including approving or rejecting held orders |
+| Salesperson | Adds customers and places orders |
+| Accountant | Ledger entries and the Credit & Dues pages |
 
 ## Project Structure
 
@@ -78,25 +108,32 @@ distributor-management-system/
 │   │   │   ├── products.py
 │   │   │   ├── stock.py
 │   │   │   ├── orders.py
+│   │   │   ├── customers.py
 │   │   │   ├── ledger.py
+│   │   │   ├── credit.py
 │   │   │   └── whatsapp_webhook.py
 │   │   └── services/
+│   │       ├── orders.py           # Order placement, FEFO allocation, holds
+│   │       ├── credit.py           # Credit limits, ageing, payment allocation, reminders
 │   │       ├── scheduler.py        # Daily background job (expiry check)
 │   │       └── whatsapp.py         # Twilio WhatsApp send helper
 │   ├── alembic/                    # Database migration history
-│   ├── tests/                      # Backend unit tests
+│   ├── scripts/                    # Demo-data seeding and payment backfill
+│   ├── tests/                      # Backend tests
 │   └── requirements.txt
 │
 └── frontend/                        # Next.js application
     ├── pages/
     │   ├── index.js                 # Landing page
-    │   ├── login.js                 # Login page
+    │   ├── login.js                 # Login / sign-up page
     │   └── dashboard/
     │       ├── index.js             # Dashboard home
     │       ├── products.js
     │       ├── stock.js
     │       ├── orders.js
-    │       └── ledger.js
+    │       ├── customers.js
+    │       ├── ledger.js
+    │       └── credit.js            # Credit & Dues
     ├── components/                  # Reusable UI (Layout, IdleWarning, etc.)
     ├── lib/                         # API client, auth hook, idle-timeout hook, JWT decode helper
     └── package.json
@@ -120,14 +157,23 @@ python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-cp .env.example .env            # then fill in DATABASE_URL, SECRET_KEY, Twilio creds
+cp .env.example .env            # then fill in the values below
 
-alembic upgrade head            # creates all tables in the database
+alembic upgrade head            # creates / updates all tables in the database
 
 uvicorn app.main:app --reload
 ```
 
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `SECRET_KEY` | Long random string used to sign JWTs |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER` | Twilio credentials |
+| `OWNER_PHONE`, `UPI_ID`, `BUSINESS_NAME` | Optional: expiry alerts and payment reminders |
+
 The API is now running at `http://127.0.0.1:8000`. FastAPI auto-generates interactive API docs at **`http://127.0.0.1:8000/docs`** — every endpoint can be tested directly from the browser without needing Postman.
+
+> After pulling new code, run `alembic upgrade head` again, otherwise newly added columns (for example the credit-control ones) will be missing from the database.
 
 ### 2. Frontend
 
@@ -143,15 +189,29 @@ npm run dev
 The app is now running at `http://localhost:3000` (redirects to `/login`).
 
 ### 3. Try the full flow
-1. Sign up as `owner` on `/login`
-2. Add a product and a stock batch (products currently created via the backend's `/docs` Swagger UI)
-3. Create an order from the dashboard — stock auto-deducts from the nearest-expiry batch (FEFO)
-4. Add a ledger entry for a customer and watch the running balance update
-5. (Optional) Set up the Twilio WhatsApp sandbox and text `ORDER <product> <qty>` to trigger an automatic order
+1. Sign up on `/login` and log in
+2. Add a product (**Products** page) and a stock batch (**Stock** page)
+3. Add a customer with a credit limit and payment days (**Customers** page)
+4. Create an order from the dashboard — stock auto-deducts from the nearest-expiry batch (FEFO)
+5. Place an order above the credit limit and approve it as the owner (**Orders** page)
+6. Add a ledger entry for a customer and watch the running balance update; review dues on **Credit & Dues**
+7. (Optional) Set up the Twilio WhatsApp sandbox and text `ORDER <product> <qty>` to trigger an automatic order
+
+Demo data can be loaded with `python -m scripts.seed_demo` from the `backend` folder, and removed again with `python -m scripts.seed_demo --clear`. Do not run it on a shared database without telling your teammates.
+
+## Deployment
+
+| Part | Where it runs |
+|---|---|
+| Frontend | AWS Amplify (`NEXT_PUBLIC_API_URL` points at the backend) |
+| Backend | AWS |
+| Database | Supabase PostgreSQL |
+
+On every backend release, run `alembic upgrade head` against the production database before using the new code.
 
 ## Database Schema
 
-The database has 8 tables, managed via SQLAlchemy models and versioned with Alembic migrations.
+The database has 9 tables, managed via SQLAlchemy models and versioned with Alembic migrations.
 
 | Table | Purpose | Key relationships |
 |---|---|---|
@@ -159,48 +219,45 @@ The database has 8 tables, managed via SQLAlchemy models and versioned with Alem
 | `products` | Catalog of sellable items | Has many `stock_batches` |
 | `suppliers` | Where stock is purchased from | Referenced by `stock_batches` |
 | `stock_batches` | Individual received lots of a product | Belongs to a `product` and optionally a `supplier`; has `expiry_date` and `status` |
-| `customers` | Buyers, identified by phone number | Referenced by `orders` and `ledger_entries` |
-| `orders` | A customer's order | Belongs to a `customer`; has many `order_items`; `source` = manual / whatsapp |
+| `customers` | Buyers, identified by phone number | Has a credit limit and payment days; referenced by `orders` and `ledger_entries` |
+| `orders` | A customer's order | Belongs to a `customer`; has many `order_items`; `source` = manual / whatsapp; can be `on_hold` |
 | `order_items` | Line items within an order | Links an `order` to a `product` and the exact `stock_batch` it was drawn from |
 | `ledger_entries` | Credit/payment history per customer | Belongs to a `customer`; stores a `running_balance` snapshot at each entry |
 | `alerts_log` | Record of alerts sent (expiry, low stock, etc.) | Not linked by foreign key — stores `related_id` generically |
 
-**Key design decision to be ready to explain:** `order_items.batch_id` links each line item to the *exact batch* it was fulfilled from — not just the product. This is what makes it possible to trace, after the fact, exactly which physical batch of stock went into which order (useful for recalls or expiry audits), and it's a direct consequence of doing FEFO at the batch level rather than tracking one total-quantity number per product.
+`order_items.batch_id` links each line item to the *exact batch* it was fulfilled from, not just the product. This makes it possible to trace which physical batch of stock went into which order, which is useful for recalls and expiry audits, and it follows from doing FEFO at the batch level rather than tracking one total quantity per product.
 
-Schema changes over time are tracked in `backend/alembic/versions/` — for example, one migration adds a `price` column to `products`, and another adds a `source` field to `orders` to distinguish manual vs WhatsApp orders. This is evidence of iterative schema evolution rather than a single one-shot design.
+Schema changes are tracked in `backend/alembic/versions/` — for example, migrations add a `price` column to products, a `source` field to orders, and the credit-control fields for customers and orders.
 
 ## Testing
 
-Backend unit tests live in `backend/tests/test_core_logic.py` and cover the two most business-critical pieces of logic:
+Backend tests live in `backend/tests/` and use an isolated **SQLite** database, not the real PostgreSQL database, so running them never touches real data.
 
-1. **FEFO batch selection** — confirms that when two batches of the same product exist, the one expiring sooner is always chosen first, even if it's not the one with more stock.
-2. **FEFO insufficient-stock handling** — confirms the system raises an error (rather than silently failing or over-allocating) when a requested quantity exceeds what's available.
-3. **Ledger running-balance math** — confirms a credit increases the balance and a payment decreases it, matching the calculation used in `routers/ledger.py`.
-
-Tests use an isolated **SQLite** database (`test_pytest.db`), not the real PostgreSQL database — so running tests never touches real data. Run them with:
+- `test_core_logic.py` — FEFO picks the nearest-expiry batch, FEFO raises an error on insufficient stock, and the ledger running-balance arithmetic is correct.
+- `test_credit_control.py` — prices come from the product catalogue, orders over the limit are held without a ledger entry, no limit means no enforcement, rejecting a held order restores stock, invalid inputs are rejected, expired batches are never allocated, payments go to the oldest order first, ageing buckets and risk levels are correct, long-overdue customers are held even under their limit, and reminder links are built correctly.
 
 ```bash
 cd backend
 pytest
 ```
 
-**Why these three tests specifically, if asked:** FEFO and ledger balance are the two pieces of logic where a silent bug would cause real financial/inventory errors (wrong stock deducted, wrong balance shown) — so they're the highest-value things to unit test, rather than testing simple CRUD endpoints that FastAPI's type validation already protects against. There is currently no test coverage for the WhatsApp webhook or the API routes themselves (no integration tests) — worth admitting as a known gap if asked "is everything tested?"
+There are currently 14 tests. They cover the business rules; the API routes and the WhatsApp webhook are not yet covered by integration tests.
 
 ## Known Limitations & Future Work
 
-Being upfront about these shows the design was considered deliberately, not accidentally incomplete:
-
-- **Order status isn't enforced as a state machine.** `pending → dispatched → delivered` is just a string field updated via one PATCH endpoint — nothing stops it from jumping straight from `pending` to `delivered`. A future version could validate allowed transitions.
-- **No integration/API-level tests**, only unit tests for core logic (FEFO + ledger math). Route-level behavior (auth failures, permission checks, webhook parsing) is untested.
-- **WhatsApp expiry alerts go to one hardcoded number**, not per-owner or per-customer configuration (see `scheduler.py` — the alert number is a placeholder string, not read from settings).
-- **CORS is fully open (`allow_origins=["*"]`)** in `main.py` — fine for development, but should be restricted to the actual deployed frontend URL in production.
-- **No pagination** on list endpoints (`GET /orders`, `GET /stock/batches`) — fine at small scale, would need it if the product/order count grows large.
-- **Products can't currently be created from the frontend UI** — the frontend only has a *view* for products; creation is done via the backend's Swagger docs. A dedicated "Add Product" form would close this gap.
-- **Auth token stored in `localStorage`** rather than an httpOnly cookie — simpler to implement, but slightly more exposed to XSS in theory than a cookie-based session would be.
+- **Owner sign-up is open.** Anyone can sign up with the `owner` role, and sign-up does not validate the role, password length or email case. Owner accounts should be invite-only.
+- **Phone numbers are not normalised.** A customer saved as `7696681338` will not match a WhatsApp number of `+917696681338`, and duplicates can be created by editing a phone number.
+- **An order cannot be split across batches.** If no single batch holds the full quantity, the order is rejected even when the total stock is enough.
+- **The WhatsApp webhook does not verify the Twilio signature.** It should check the signature so that only Twilio can create orders.
+- **Order status is not a strict state machine.** `pending → dispatched → delivered` is a string field updated through one PATCH endpoint, so it can move backwards or skip a step.
+- **Expiry alerts are plain-text WhatsApp messages**, which Twilio usually rejects outside the 24-hour reply window. Approved templates are needed for reliable delivery.
+- **CORS is fully open (`allow_origins=["*"]`)** in `main.py`. It should be restricted to the deployed frontend URL.
+- **No pagination** on list endpoints (`GET /orders`, `GET /stock/batches`).
+- **No API-level integration tests**, only tests for the business logic.
+- **Auth token stored in `localStorage`** rather than an httpOnly cookie, which is simpler but more exposed to XSS in theory.
 
 ## Acknowledgements
 
-- Built as a Software Engineering team project.
-- Backend framework: [FastAPI](https://fastapi.tiangolo.com/)
-- Frontend framework: [Next.js](https://nextjs.org/)
-- WhatsApp integration powered by [Twilio](https://www.twilio.com/)
+- Hosting: [AWS Amplify](https://aws.amazon.com/amplify/)
+- Database: [Supabase](https://supabase.com/)
+- Team: [Tanish Garg](https://github.com/Tanish118248), [Divya Sharma](https://github.com/Divyasharma1910), [Gautam Jindal](https://github.com/gautamjindal2603)
